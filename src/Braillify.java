@@ -7,11 +7,15 @@ import java.io.FileWriter;
 import javax.imageio.ImageIO;
 
 public class Braillify {
-	public String toBraille(BufferedImage image, boolean invert, int mode, double brightness) {
+	public String toBraille(BufferedImage image, boolean invert, int mode, double brightness, boolean colour) {
 		String str = "";
 		for (int i = 0; i < image.getHeight(); i += 4) {
 			for (int j = 0; j < image.getWidth(); j += 2) {
 				int blank = 10240;
+				int rSqSum = 0;
+				int gSqSum = 0;
+				int bSqSum = 0;
+				int count = 0;
 				for (int k = 0; k < 8; k++) {
 					Color pixelColor;
 					if (k < 6) {
@@ -56,12 +60,27 @@ public class Braillify {
 					}
 					if (dot != invert) {
 						blank += 1 << k;
+						rSqSum += pixelColor.getRed() * pixelColor.getRed();
+						gSqSum += pixelColor.getGreen() * pixelColor.getGreen();
+						bSqSum += pixelColor.getBlue() * pixelColor.getBlue();
+						count++;
 					}
 				}
 				if (blank == 10240) {
 					str += " ";
 				} else {
-					str += ((char) blank);
+					String brailleColour = "";
+					if (colour) {
+						int r = (int) Math.round(Math.sqrt(rSqSum / count));
+						int g = (int) Math.round(Math.sqrt(gSqSum / count));
+						int b = (int) Math.round(Math.sqrt(bSqSum / count));
+
+						brailleColour += "\033[38;2;";
+						brailleColour += r + ";";
+						brailleColour += g + ";";
+						brailleColour += b + "m";
+					}
+					str += (brailleColour + (char) blank);
 				}
 			}
 			str += "\n";
@@ -69,11 +88,12 @@ public class Braillify {
 		return str;
 	}
 
-	public String init(BufferedImage inBImage, int width, int height, boolean invert, int mode, double brightness) {
+	public String init(BufferedImage inBImage, int width, int height, boolean invert, int mode, double brightness,
+			boolean colour) {
 		Image outImage = inBImage.getScaledInstance(width, height, BufferedImage.SCALE_SMOOTH);
 		BufferedImage outBImage = new BufferedImage(width, height, BufferedImage.TYPE_3BYTE_BGR);
 		outBImage.getGraphics().drawImage(outImage, 0, 0, null);
-		return toBraille(outBImage, invert, mode, brightness);
+		return toBraille(outBImage, invert, mode, brightness, colour);
 	}
 
 	public static void main(String[] args) {
@@ -87,7 +107,7 @@ public class Braillify {
 		int brightness = 50;
 		int mode = 1;
 		boolean invert = false;
-
+		boolean colour = true;
 		try {
 			for (int i = 0; i < args.length; i += 2) {
 				if (args[i].charAt(0) != '-') {
@@ -154,6 +174,7 @@ public class Braillify {
 					throw new Exception();
 				}
 			}
+			colour = outPath == "";
 			inBImage = ImageIO.read(image);
 			if (inBImage == null) {
 				System.out.println("Cannot read image at " + inPath);
@@ -167,20 +188,20 @@ public class Braillify {
 			width += width % 2;
 			height += 4 - (height % 4);
 
-			if (outPath == "") {
+			if (colour) {
 				System.out.print("\033c");
 				System.out.flush();
 			}
 
 			Braillify b = new Braillify();
-			String brailleText = b.init(inBImage, width, height, invert, mode, brightness / 100.0);
+			String brailleText = b.init(inBImage, width, height, invert, mode, brightness / 100.0, colour);
 
-			if (outPath == "") {
-				System.out.println(brailleText);
-			} else {
+			if (!colour) {
 				FileWriter fw = new FileWriter(outPath);
 				fw.write(brailleText);
 				fw.close();
+			} else {
+				System.out.println(brailleText);
 			}
 
 		} catch (Exception e) {
