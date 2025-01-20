@@ -7,7 +7,7 @@ import java.io.FileWriter;
 import javax.imageio.ImageIO;
 
 public class Braillify {
-	public String toBraille(BufferedImage image, int invert, int mode, double brightness, boolean colour) {
+	public String toBraille(BufferedImage image, boolean invert, int mode, double brightness, boolean colour) {
 		String str = "";
 		for (int i = 0; i < image.getHeight(); i += 4) {
 			for (int j = 0; j < image.getWidth(); j += 2) {
@@ -58,7 +58,7 @@ public class Braillify {
 					} else {
 						dot = pixelBrightness > brightness;
 					}
-					if ((invert == -1) || (dot == true && invert == 0) || (dot == false && invert == 1)) {
+					if (dot!=invert) {
 						blank += 1 << k;
 						rSqSum += pixelColor.getRed() * pixelColor.getRed();
 						gSqSum += pixelColor.getGreen() * pixelColor.getGreen();
@@ -88,7 +88,7 @@ public class Braillify {
 		return str;
 	}
 
-	public String init(BufferedImage inBImage, int width, int height, int invert, int mode, double brightness,
+	public String init(BufferedImage inBImage, int width, int height, boolean invert, int mode, double brightness,
 			boolean colour) {
 		Image outImage = inBImage.getScaledInstance(width, height, BufferedImage.SCALE_SMOOTH);
 		BufferedImage outBImage = new BufferedImage(width, height, BufferedImage.TYPE_3BYTE_BGR);
@@ -106,7 +106,7 @@ public class Braillify {
 		int height = -1;
 		int brightness = 50;
 		int mode = 1;
-		int invert = 0;
+		boolean invert = false;
 		boolean colour = true;
 		try {
 			for (int i = 0; i < args.length; i += 2) {
@@ -125,17 +125,7 @@ public class Braillify {
 					height = Integer.parseInt(args[i + 1].split(",")[1]);
 					break;
 				case 'i':
-					switch (args[i + 1].toUpperCase().charAt(0)) {
-					case 'Y':
-						invert = 1;
-						break;
-					case 'N':
-						invert = 0;
-						break;
-					case 'B':
-						invert = -1;
-						break;
-					}
+					invert = (args[i + 1].toUpperCase().charAt(0) == 'Y');
 					break;
 				case 'm':
 					switch (args[i + 1].toLowerCase()) {
@@ -216,7 +206,7 @@ public class Braillify {
 
 		} catch (Exception e) {
 			System.out.println(
-					"Usage: java -jar Braillify.jar -p <image path> [-o <out path>] [-d <width>,<height>] [-i <invert (Y)es/(N)o/(B)oth>] [-m <mode min/avg/rms/max/r/g/b>] [-b <brightness%>]");
+					"Usage: java -jar Braillify.jar -p <image path> [-o <out path>] [-d <width>,<height>] [-i <invert Y/N] [-m <mode min/avg/rms/max/r/g/b>] [-b <brightness%>]");
 			System.exit(0);
 		}
 
