@@ -7,7 +7,8 @@ import java.io.FileWriter;
 import javax.imageio.ImageIO;
 
 public class Braillify {
-	public String toBraille(BufferedImage image, boolean invert, int mode, double brightness, boolean colour) {
+	public String toBraille(BufferedImage image, char space, boolean invert, int mode, double brightness,
+			boolean colour) {
 		String str = "";
 		for (int i = 0; i < image.getHeight(); i += 4) {
 			for (int j = 0; j < image.getWidth(); j += 2) {
@@ -58,7 +59,7 @@ public class Braillify {
 					} else {
 						dot = pixelBrightness > brightness;
 					}
-					if (dot!=invert) {
+					if (dot != invert) {
 						blank += 1 << k;
 						rSqSum += pixelColor.getRed() * pixelColor.getRed();
 						gSqSum += pixelColor.getGreen() * pixelColor.getGreen();
@@ -67,7 +68,10 @@ public class Braillify {
 					}
 				}
 				if (blank == 10240) {
-					str += " ";
+					if (colour) {
+						str += "\033[38;2;0;0;0m";
+					}
+					str += space;
 				} else {
 					String brailleColour = "";
 					if (colour) {
@@ -88,12 +92,12 @@ public class Braillify {
 		return str;
 	}
 
-	public String init(BufferedImage inBImage, int width, int height, boolean invert, int mode, double brightness,
-			boolean colour) {
+	public String init(BufferedImage inBImage, int width, int height, char space, boolean invert, int mode,
+			double brightness, boolean colour) {
 		Image outImage = inBImage.getScaledInstance(width, height, BufferedImage.SCALE_SMOOTH);
 		BufferedImage outBImage = new BufferedImage(width, height, BufferedImage.TYPE_3BYTE_BGR);
 		outBImage.getGraphics().drawImage(outImage, 0, 0, null);
-		return toBraille(outBImage, invert, mode, brightness, colour);
+		return toBraille(outBImage, space, invert, mode, brightness, colour);
 	}
 
 	public static void main(String[] args) {
@@ -106,6 +110,7 @@ public class Braillify {
 		int height = -1;
 		int brightness = 50;
 		int mode = 1;
+		char space = ' ';
 		boolean invert = false;
 		boolean colour = true;
 		try {
@@ -123,6 +128,19 @@ public class Braillify {
 				case 'd':
 					width = Integer.parseInt(args[i + 1].split(",")[0]);
 					height = Integer.parseInt(args[i + 1].split(",")[1]);
+					break;
+				case 's':
+					switch (args[i + 1].toLowerCase()) {
+					case "space":
+						space = ' ';
+						break;
+					case "blank":
+						space = (char) 10240;
+						break;
+					case "dot":
+						space = (char) 10241;
+						break;
+					}
 					break;
 				case 'i':
 					invert = (args[i + 1].toUpperCase().charAt(0) == 'Y');
@@ -194,7 +212,7 @@ public class Braillify {
 			}
 
 			Braillify b = new Braillify();
-			String brailleText = b.init(inBImage, width, height, invert, mode, brightness / 100.0, colour);
+			String brailleText = b.init(inBImage, width, height, space, invert, mode, brightness / 100.0, colour);
 
 			if (!colour) {
 				FileWriter fw = new FileWriter(outPath);
@@ -206,7 +224,7 @@ public class Braillify {
 
 		} catch (Exception e) {
 			System.out.println(
-					"Usage: java -jar Braillify.jar -p <image path> [-o <out path>] [-d <width>,<height>] [-i <invert Y/N] [-m <mode min/avg/rms/max/r/g/b>] [-b <brightness%>]");
+					"Usage: java -jar Braillify.jar -p <image path> [-o <out path>] [-d <width>,<height>] [-s <space character space/blank/dot>] [-i <invert Y/N] [-m <mode min/avg/rms/max/r/g/b>] [-b <brightness%>]");
 			System.exit(0);
 		}
 
