@@ -2,6 +2,7 @@ import java.awt.Color;
 import java.awt.Image;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.FileWriter;
 
 import javax.imageio.ImageIO;
 
@@ -29,8 +30,22 @@ public class Braillify {
 						pixelBrightness = (pixelColor.getRed() + pixelColor.getGreen() + pixelColor.getBlue()) / 3.0;
 						break;
 					case 2:
+						pixelBrightness = Math.sqrt((pixelColor.getRed() * pixelColor.getRed()
+								+ pixelColor.getGreen() * pixelColor.getGreen()
+								+ pixelColor.getBlue() * pixelColor.getBlue()) / 3.0);
+						break;
+					case 3:
 						pixelBrightness = Math.max(pixelColor.getRed(),
 								Math.max(pixelColor.getGreen(), pixelColor.getBlue()));
+						break;
+					case 4:
+						pixelBrightness = pixelColor.getRed();
+						break;
+					case 5:
+						pixelBrightness = pixelColor.getGreen();
+						break;
+					case 6:
+						pixelBrightness = pixelColor.getBlue();
 						break;
 					}
 					pixelBrightness /= 255;
@@ -54,22 +69,25 @@ public class Braillify {
 		return str;
 	}
 
-	public void init(BufferedImage inBImage, int width, int height, boolean invert, int mode, double brightness) {
+	public String init(BufferedImage inBImage, int width, int height, boolean invert, int mode, double brightness) {
 		Image outImage = inBImage.getScaledInstance(width, height, BufferedImage.SCALE_SMOOTH);
 		BufferedImage outBImage = new BufferedImage(width, height, BufferedImage.TYPE_3BYTE_BGR);
 		outBImage.getGraphics().drawImage(outImage, 0, 0, null);
-		System.out.println(toBraille(outBImage, invert, mode, brightness));
+		return toBraille(outBImage, invert, mode, brightness);
 	}
 
 	public static void main(String[] args) {
-		String path = "";
+		String inPath = "";
+		File image;
+		BufferedImage inBImage = null;
+		String outPath = "";
+		File braille;
 		int width = -1;
 		int height = -1;
 		int brightness = 50;
 		int mode = 1;
 		boolean invert = false;
-		File image;
-		BufferedImage inBImage = null;
+
 		try {
 			for (int i = 0; i < args.length; i += 2) {
 				if (args[i].charAt(0) != '-') {
@@ -77,7 +95,10 @@ public class Braillify {
 				}
 				switch (args[i].charAt(1)) {
 				case 'p':
-					path = args[i + 1];
+					inPath = args[i + 1].replaceAll("\"", "").replaceAll("'", "");
+					break;
+				case 'o':
+					outPath = args[i + 1].replaceAll("\"", "").replaceAll("'", "");
 					break;
 				case 'd':
 					width = Integer.parseInt(args[i + 1].split(",")[0]);
@@ -94,8 +115,20 @@ public class Braillify {
 					case "avg":
 						mode = 1;
 						break;
-					case "max":
+					case "rms":
 						mode = 2;
+						break;
+					case "max":
+						mode = 3;
+						break;
+					case "r":
+						mode = 4;
+						break;
+					case "g":
+						mode = 5;
+						break;
+					case "b":
+						mode = 6;
 						break;
 					}
 					break;
@@ -103,32 +136,59 @@ public class Braillify {
 					brightness = Integer.parseInt(args[i + 1]);
 					break;
 				default:
+					System.out.println("Unknown flag: " + args[i]);
 					throw new Exception();
 				}
 			}
-			image = new File(path.replaceAll("\"", ""));
-			if (image.exists() == false || image.isFile() == false || image.canRead() == false) {
+
+			image = new File(inPath);
+			if (!(image.exists() && image.isFile() && image.canRead())) {
+				System.out.println("Image not found at " + inPath);
 				throw new Exception();
+			}
+			if (outPath != "") {
+				braille = new File(outPath);
+				braille.createNewFile();
+				if (!braille.canWrite()) {
+					System.out.println("Cannot write to " + outPath);
+					throw new Exception();
+				}
 			}
 			inBImage = ImageIO.read(image);
 			if (inBImage == null) {
+				System.out.println("Cannot read image at " + inPath);
 				throw new Exception();
 			}
+
 			if (width == -1 || height == -1) {
 				width = inBImage.getWidth();
 				height = inBImage.getHeight();
 			}
 			width += width % 2;
 			height += 4 - (height % 4);
+
+			if (outPath == "") {
+				System.out.print("\033c");
+				System.out.flush();
+			}
+
+			Braillify b = new Braillify();
+			String brailleText = b.init(inBImage, width, height, invert, mode, brightness / 100.0);
+
+			if (outPath == "") {
+				System.out.println(brailleText);
+			} else {
+				FileWriter fw = new FileWriter(outPath);
+				fw.write(brailleText);
+				fw.close();
+			}
+
 		} catch (Exception e) {
 			System.out.println(
-					"Usage: java -jar Braillify.jar -p <image path> [-d <width>,<height>] [-i <invert Y/N>] [-m <mode min/avg/max>] [-b <brightness%>]");
+					"Usage: java -jar Braillify.jar -p <image path> [-o <out path>] [-d <width>,<height>] [-i <invert Y/N>] [-m <mode min/avg/rms/max/r/g/b>] [-b <brightness%>]");
 			System.exit(0);
 		}
-		System.out.print("\033c");
-		System.out.flush();
-		Braillify b = new Braillify();
-		b.init(inBImage, width, height, invert, mode, brightness / 100.0);
+
 	}
 
 }
