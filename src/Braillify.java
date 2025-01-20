@@ -145,6 +145,9 @@ public class Braillify {
 				case 'i':
 					invert = (args[i + 1].toUpperCase().charAt(0) == 'Y');
 					break;
+				case 'c':
+					colour= (args[i + 1].toUpperCase().charAt(0) == 'Y');
+					break;
 				case 'm':
 					switch (args[i + 1].toLowerCase()) {
 					case "min":
@@ -192,7 +195,6 @@ public class Braillify {
 					throw new Exception();
 				}
 			}
-			colour = outPath == "";
 			inBImage = ImageIO.read(image);
 			if (inBImage == null) {
 				System.out.println("Cannot read image at: " + inPath);
@@ -206,7 +208,7 @@ public class Braillify {
 			width += width % 2;
 			height += 4 - (height % 4);
 
-			if (colour) {
+			if (outPath == "") {
 				System.out.print("\033c");
 				System.out.flush();
 			}
@@ -214,7 +216,7 @@ public class Braillify {
 			Braillify b = new Braillify();
 			String brailleText = b.init(inBImage, width, height, space, invert, mode, brightness / 100.0, colour);
 
-			if (!colour) {
+			if (outPath != "") {
 				FileWriter fw = new FileWriter(outPath);
 				fw.write(brailleText);
 				fw.close();
@@ -224,7 +226,7 @@ public class Braillify {
 
 		} catch (Exception e) {
 			System.out.println(
-					"Usage: java -jar Braillify.jar -p <image path> [-o <out path>] [-d <width>,<height>] [-s <space character space/blank/dot>] [-i <invert Y/N] [-m <mode min/avg/rms/max/r/g/b>] [-b <brightness%>]");
+					"Usage: java -jar Braillify.jar -p <image path> [-o <out path>] [-d <width>,<height>] [-s <space character space/blank/dot>] [-i <invert Y/N>] [-c <colour Y/N>] [-m <mode min/avg/rms/max/r/g/b>] [-b <brightness%>]");
 			System.exit(0);
 		}
 
