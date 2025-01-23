@@ -3,7 +3,6 @@ import java.awt.Image;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileWriter;
-import java.io.IOException;
 
 import javax.imageio.ImageIO;
 
@@ -85,11 +84,6 @@ public class Braillify {
 		double[][] sobely = { { 1 / 4.0, 2 / 4.0, 1 / 4.0 }, { 0, 0, 0 }, { -1 / 4.0, -2 / 4.0, -1 / 4.0 } };
 		image = convolute(image, gaussian);
 		image = convoluteComplex(image, sobelx, sobely);
-		try {
-			ImageIO.write(image, "png", new File("output.png"));
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
 		return image;
 	}
 
