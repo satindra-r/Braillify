@@ -3,13 +3,105 @@ import java.awt.Image;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileWriter;
+import java.io.IOException;
 
 import javax.imageio.ImageIO;
 
 public class Braillify {
-	public String toBraille(BufferedImage image, char space, boolean invert, int mode, double brightness,
+	public int clamp(int val, int min, int max) {
+		return Math.min(Math.max(val, min), max);
+	}
+
+	public BufferedImage convolute(BufferedImage image, double[][] kernel) {
+		int size = kernel.length;
+		BufferedImage imageOut = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_3BYTE_BGR);
+		for (int j = 0; j < image.getHeight(); j++) {
+			for (int i = 0; i < image.getWidth(); i++) {
+				Color[][] p = new Color[size][size];
+				for (int l = 0; l < size; l++) {
+					for (int k = 0; k < size; k++) {
+						p[k][l] = new Color(image.getRGB(clamp(i + k - size / 2, 0, image.getWidth() - 1),
+								clamp(j + l - size / 2, 0, image.getHeight() - 1)));
+					}
+				}
+				double sumr = 0;
+				double sumg = 0;
+				double sumb = 0;
+				for (int l = 0; l < size; l++) {
+					for (int k = 0; k < size; k++) {
+						sumr += p[k][l].getRed() * kernel[k][l];
+						sumg += p[k][l].getGreen() * kernel[k][l];
+						sumb += p[k][l].getBlue() * kernel[k][l];
+					}
+				}
+				imageOut.setRGB(i, j, new Color((int) sumr, (int) sumg, (int) sumb).getRGB());
+			}
+		}
+		return imageOut;
+	}
+
+	public BufferedImage convoluteComplex(BufferedImage image, double[][] kernelReal, double[][] kernelImag) {
+		int size = kernelReal.length;
+		BufferedImage imageOut = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_3BYTE_BGR);
+		for (int j = 0; j < image.getHeight(); j++) {
+			for (int i = 0; i < image.getWidth(); i++) {
+				Color[][] p = new Color[size][size];
+
+				for (int l = 0; l < size; l++) {
+					for (int k = 0; k < size; k++) {
+						p[k][l] = new Color(image.getRGB(clamp(i + k - size / 2, 0, image.getWidth() - 1),
+								clamp(j + l - size / 2, 0, image.getHeight() - 1)));
+					}
+				}
+				double sumRealr = 0;
+				double sumRealg = 0;
+				double sumRealb = 0;
+				double sumImagr = 0;
+				double sumImagg = 0;
+				double sumImagb = 0;
+				for (int l = 0; l < size; l++) {
+					for (int k = 0; k < size; k++) {
+						sumRealr += p[k][l].getRed() * kernelReal[k][l];
+						sumRealg += p[k][l].getGreen() * kernelReal[k][l];
+						sumRealb += p[k][l].getBlue() * kernelReal[k][l];
+						sumImagr += p[k][l].getRed() * kernelImag[k][l];
+						sumImagg += p[k][l].getGreen() * kernelImag[k][l];
+						sumImagb += p[k][l].getBlue() * kernelImag[k][l];
+					}
+				}
+				imageOut.setRGB(i, j,
+						new Color((int) Math.sqrt((sumRealr * sumRealr + sumImagr * sumImagr) / 2),
+								(int) Math.sqrt((sumRealg * sumRealg + sumImagg * sumImagg) / 2),
+								(int) Math.sqrt((sumRealb * sumRealb + sumImagb * sumImagb) / 2)).getRGB());
+			}
+		}
+		return imageOut;
+	}
+
+	public BufferedImage edgeDetect(BufferedImage image) {
+		double[][] gaussian = { { 1 / 16.0, 2 / 16.0, 1 / 16.0 }, { 2 / 16.0, 4 / 16.0, 2 / 16.0 },
+				{ 1 / 16.0, 2 / 16.0, 1 / 16.0 } };
+		double[][] sobelx = { { 1 / 4.0, 0, -1 / 4.0 }, { 2 / 4.0, 0, -2 / 4.0 }, { 1 / 4.0, 0, -1 / 4.0 } };
+		double[][] sobely = { { 1 / 4.0, 2 / 4.0, 1 / 4.0 }, { 0, 0, 0 }, { -1 / 4.0, -2 / 4.0, -1 / 4.0 } };
+		image = convolute(image, gaussian);
+		image = convoluteComplex(image, sobelx, sobely);
+		try {
+			ImageIO.write(image, "png", new File("output.png"));
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return image;
+	}
+
+	public String toBraille(BufferedImage image, char space, boolean invert, boolean edge, int mode, double brightness,
 			boolean colour) {
 		String str = "";
+		BufferedImage brightnessImage = null;
+		if (edge) {
+			brightnessImage = edgeDetect(image);
+		} else {
+			brightnessImage = image;
+		}
 		for (int i = 0; i < image.getHeight(); i += 4) {
 			for (int j = 0; j < image.getWidth(); j += 2) {
 				int blank = 10240;
@@ -19,38 +111,38 @@ public class Braillify {
 				int count = 0;
 				for (int k = 0; k < 8; k++) {
 					Color pixelColor;
+					Color pixelBrightnessColor;
 					if (k < 6) {
 						pixelColor = new Color(image.getRGB(j + k / 3, i + k % 3));
+						pixelBrightnessColor = new Color(brightnessImage.getRGB(j + k / 3, i + k % 3));
 					} else {
 						pixelColor = new Color(image.getRGB(j + k % 2, i + 3));
+						pixelBrightnessColor = new Color(brightnessImage.getRGB(j + k % 2, i + 3));
 					}
 					boolean dot = false;
 					double pixelBrightness = -1;
 					switch (mode) {
 					case 0:
-						pixelBrightness = Math.min(pixelColor.getRed(),
-								Math.min(pixelColor.getGreen(), pixelColor.getBlue()));
+						pixelBrightness = Math.min(pixelBrightnessColor.getRed(),
+								Math.min(pixelBrightnessColor.getGreen(), pixelBrightnessColor.getBlue()));
 						break;
 					case 1:
-						pixelBrightness = (pixelColor.getRed() + pixelColor.getGreen() + pixelColor.getBlue()) / 3.0;
+						pixelBrightness = Math.sqrt((pixelBrightnessColor.getRed() * pixelBrightnessColor.getRed()
+								+ pixelBrightnessColor.getGreen() * pixelBrightnessColor.getGreen()
+								+ pixelBrightnessColor.getBlue() * pixelBrightnessColor.getBlue()) / 3.0);
 						break;
 					case 2:
-						pixelBrightness = Math.sqrt((pixelColor.getRed() * pixelColor.getRed()
-								+ pixelColor.getGreen() * pixelColor.getGreen()
-								+ pixelColor.getBlue() * pixelColor.getBlue()) / 3.0);
+						pixelBrightness = Math.max(pixelBrightnessColor.getRed(),
+								Math.max(pixelBrightnessColor.getGreen(), pixelBrightnessColor.getBlue()));
 						break;
 					case 3:
-						pixelBrightness = Math.max(pixelColor.getRed(),
-								Math.max(pixelColor.getGreen(), pixelColor.getBlue()));
+						pixelBrightness = pixelBrightnessColor.getRed();
 						break;
 					case 4:
-						pixelBrightness = pixelColor.getRed();
+						pixelBrightness = pixelBrightnessColor.getGreen();
 						break;
 					case 5:
-						pixelBrightness = pixelColor.getGreen();
-						break;
-					case 6:
-						pixelBrightness = pixelColor.getBlue();
+						pixelBrightness = pixelBrightnessColor.getBlue();
 						break;
 					}
 					pixelBrightness /= 255;
@@ -92,12 +184,12 @@ public class Braillify {
 		return str;
 	}
 
-	public String init(BufferedImage inBImage, int width, int height, char space, boolean invert, int mode,
-			double brightness, boolean colour) {
+	public String init(BufferedImage inBImage, int width, int height, char space, boolean invert, boolean edge,
+			int mode, double brightness, boolean colour) {
 		Image outImage = inBImage.getScaledInstance(width, height, BufferedImage.SCALE_SMOOTH);
 		BufferedImage outBImage = new BufferedImage(width, height, BufferedImage.TYPE_3BYTE_BGR);
 		outBImage.getGraphics().drawImage(outImage, 0, 0, null);
-		return toBraille(outBImage, space, invert, mode, brightness, colour);
+		return toBraille(outBImage, space, invert, edge, mode, brightness, colour);
 	}
 
 	public static void main(String[] args) {
@@ -109,9 +201,10 @@ public class Braillify {
 		int width = -1;
 		int height = -1;
 		int brightness = 50;
-		int mode = 1;
+		int mode = 2;
 		char space = ' ';
 		boolean invert = false;
+		boolean edge = false;
 		boolean colour = true;
 		try {
 			for (int i = 0; i < args.length; i += 2) {
@@ -145,31 +238,31 @@ public class Braillify {
 				case 'i':
 					invert = (args[i + 1].toUpperCase().charAt(0) == 'Y');
 					break;
+				case 'e':
+					edge = (args[i + 1].toUpperCase().charAt(0) == 'Y');
+					break;
 				case 'c':
-					colour= (args[i + 1].toUpperCase().charAt(0) == 'Y');
+					colour = (args[i + 1].toUpperCase().charAt(0) == 'Y');
 					break;
 				case 'm':
 					switch (args[i + 1].toLowerCase()) {
 					case "min":
 						mode = 0;
 						break;
-					case "avg":
+					case "rms":
 						mode = 1;
 						break;
-					case "rms":
+					case "max":
 						mode = 2;
 						break;
-					case "max":
+					case "r":
 						mode = 3;
 						break;
-					case "r":
+					case "g":
 						mode = 4;
 						break;
-					case "g":
-						mode = 5;
-						break;
 					case "b":
-						mode = 6;
+						mode = 5;
 						break;
 					}
 					break;
@@ -214,7 +307,7 @@ public class Braillify {
 			}
 
 			Braillify b = new Braillify();
-			String brailleText = b.init(inBImage, width, height, space, invert, mode, brightness / 100.0, colour);
+			String brailleText = b.init(inBImage, width, height, space, invert, edge, mode, brightness / 100.0, colour);
 
 			if (outPath != "") {
 				FileWriter fw = new FileWriter(outPath);
@@ -226,7 +319,8 @@ public class Braillify {
 
 		} catch (Exception e) {
 			System.out.println(
-					"Usage: java -jar Braillify.jar -p <image path> [-o <out path>] [-d <width>,<height>] [-s <space character space/blank/dot>] [-i <invert Y/N>] [-c <colour Y/N>] [-m <mode min/avg/rms/max/r/g/b>] [-b <brightness%>]");
+					"Usage: java -jar Braillify.jar -p <image path> [-o <out path>] [-d <width>,<height>] [-s <space character space/blank/dot>] [-i <invert Y/N>] [-e <edges Y/N>] [-c <colour Y/N>] [-m <mode min/rms/max/r/g/b>] [-b <brightness%>]");
+			e.printStackTrace();
 			System.exit(0);
 		}
 
