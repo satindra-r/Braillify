@@ -175,6 +175,7 @@ public class Braillify {
 			}
 			str += "\n";
 		}
+		str+="\033[0m";
 		return str;
 	}
 
